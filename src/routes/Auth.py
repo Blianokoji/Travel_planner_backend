@@ -5,25 +5,14 @@ from typing import Optional
 from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
-import logging
-import os
-from src.utils.database import database
+from src.models.firebase import firebase_db
+from settings import settings
+from src.dependencies.auth import get_current_user, TokenData
 
-# Router setup
 auth_router = APIRouter()
 
-# Configuration
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', 'Dracalar@2099')
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_MINUTES = 60 * 24  # 24 hours
-
-# Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-# Database
-mongo_db = database.db
-
-# Pydantic models
 class UserCreate(BaseModel):
     username: str
     email: EmailStr
@@ -42,182 +31,67 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-# Utility functions
-def verify_password(plain_password, hashed_password):
-    return pwd_context.verify(plain_password, hashed_password)
+def verify_password(plain, hashed):
+    return pwd_context.verify(plain, hashed)
 
 def get_password_hash(password):
     return pwd_context.hash(password)
 
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    if expires_delta:
-        expire = datetime.utcnow() + expires_delta
-    else:
-        expire = datetime.utcnow() + timedelta(minutes=JWT_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
-    return encoded_jwt
+    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
+    data.update({"exp": expire})
+    return jwt.encode(data, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
 
 async def get_user(username: str):
-    """Get user from database"""
-    try:
-        user = mongo_db.users.find_one({"username": username})
-        return user
-    except Exception as e:
-        logging.error(f"Error getting user: {str(e)}")
-        return None
+    docs = firebase_db.collection("users").where("username", "==", username).stream()
+    async for doc in docs:
+        return doc.to_dict()
+    return None
 
 async def authenticate_user(username: str, password: str):
-    """Authenticate user credentials"""
     user = await get_user(username)
-    if not user:
-        return False
-    if not verify_password(password, user["password"]):
-        return False
+    if not user or not verify_password(password, user["password"]):
+        return None
     return user
 
-# Routes
-@auth_router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@auth_router.post("/register", response_model=UserResponse, status_code=201)
 async def register(user: UserCreate):
-    """Register a new user"""
-    try:
-        # Check if user already exists
-        existing_user = await get_user(user.username)
-        if existing_user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Username already registered"
-            )
-        
-        # Check if email already exists
-        existing_email = mongo_db.users.find_one({"email": user.email})
-        if existing_email:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered"
-            )
-        
-        # Hash password and create user
-        hashed_password = get_password_hash(user.password)
-        user_data = {
-            "username": user.username,
-            "email": user.email,
-            "password": hashed_password,
-            "created_at": datetime.utcnow()
-        }
-        
-        result = mongo_db.users.insert_one(user_data)
-        if result.inserted_id:
-            logging.info(f"User {user.username} registered successfully")
-            return UserResponse(
-                username=user.username,
-                email=user.email,
-                created_at=user_data["created_at"]
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to create user"
-            )
-            
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error registering user: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+    if await get_user(user.username):
+        raise HTTPException(400, "Username already exists")
+
+    email_check = firebase_db.collection("users").where("email", "==", user.email).stream()
+    async for _ in email_check:
+        raise HTTPException(400, "Email already registered")
+
+    hashed_password = get_password_hash(user.password)
+    data = {
+        "username": user.username,
+        "email": user.email,
+        "password": hashed_password,
+        "created_at": datetime.utcnow()
+    }
+    firebase_db.collection("users").add(data)
+    return UserResponse(**{k: data[k] for k in ("username", "email", "created_at")})
 
 @auth_router.post("/token", response_model=Token)
-async def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends()):
-    """Login and get access token"""
-    try:
-        user = await authenticate_user(form_data.username, form_data.password)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        access_token_expires = timedelta(minutes=JWT_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user["username"]}, 
-            expires_delta=access_token_expires
-        )
-        
-        logging.info(f"User {user['username']} logged in successfully")
-        return {"access_token": access_token, "token_type": "bearer"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error during login: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+async def login_token(form_data: OAuth2PasswordRequestForm = Depends()):
+    user = await authenticate_user(form_data.username, form_data.password)
+    if not user:
+        raise HTTPException(401, "Invalid credentials")
+    access_token = create_access_token({"sub": user["username"]})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @auth_router.post("/login", response_model=Token)
-async def login(user_credentials: UserLogin):
-    """Alternative login endpoint with JSON body"""
-    try:
-        user = await authenticate_user(user_credentials.username, user_credentials.password)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Incorrect username or password",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
-        
-        access_token_expires = timedelta(minutes=JWT_EXPIRE_MINUTES)
-        access_token = create_access_token(
-            data={"sub": user["username"]}, 
-            expires_delta=access_token_expires
-        )
-        
-        logging.info(f"User {user['username']} logged in successfully")
-        return {"access_token": access_token, "token_type": "bearer"}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error during login: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
+async def login(user_data: UserLogin):
+    user = await authenticate_user(user_data.username, user_data.password)
+    if not user:
+        raise HTTPException(401, "Invalid credentials")
+    access_token = create_access_token({"sub": user["username"]})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @auth_router.get("/me", response_model=UserResponse)
-async def read_users_me(current_user: TokenData = Depends(get_current_user)):
-    """Get current user info"""
-    try:
-        user = await get_user(current_user.username)
-        if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found"
-            )
-        
-        return UserResponse(
-            username=user["username"],
-            email=user["email"],
-            created_at=user["created_at"]
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logging.error(f"Error getting user info: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Internal server error"
-        )
-
-# Note: You'll need to import get_current_user from your main app
-# or define it in a shared utilities module
+async def get_me(current_user: TokenData = Depends(get_current_user)):
+    user = await get_user(current_user.username)
+    if not user:
+        raise HTTPException(404, "User not found")
+    return UserResponse(**{k: user[k] for k in ("username", "email", "created_at")})
