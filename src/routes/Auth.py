@@ -43,6 +43,9 @@ def get_password_hash(password):
     return pwd_context.hash(password)
 
 async def get_user(username: str):
+    if not firebase_db:
+        raise HTTPException(status_code=503, detail="Database not available")
+    
     logging.debug(f"Querying user: {username}")
     docs = firebase_db.collection("users").where("username", "==", username).stream()
     for doc in docs:
@@ -62,6 +65,9 @@ async def authenticate_user(username: str, password: str):
 @auth_router.post("/register", response_model=RegisterResponse, status_code=201)
 async def register(user: UserCreate, response: Response):
     try:
+        if not firebase_db:
+            raise HTTPException(status_code=503, detail="Database not available")
+            
         if await get_user(user.username):
             raise HTTPException(400, "Username already exists")
 

@@ -6,7 +6,9 @@ from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
-    FIREBASE_CREDENTIALS_PATH: str
+    # Firebase settings - use environment variable for credentials
+    FIREBASE_CREDENTIALS_PATH: str = ""
+    
     app_name: str = "Travel Planner API"
     debug: bool = False
 
@@ -37,7 +39,16 @@ class Settings(BaseSettings):
 # Instantiate settings
 settings = Settings()
 
-# ✅ Firebase Credentials Loading
-firebase_credentials_path = Path(settings.FIREBASE_CREDENTIALS_PATH).resolve()
-with open(firebase_credentials_path, "r") as f:
-    firebase_credentials = json.load(f)
+# Firebase Credentials Loading
+firebase_credentials = None
+
+if settings.FIREBASE_CREDENTIALS_PATH:
+    # Load from file path
+    try:
+        firebase_credentials_path = Path(settings.FIREBASE_CREDENTIALS_PATH).resolve()
+        with open(firebase_credentials_path, "r") as f:
+            firebase_credentials = json.load(f)
+    except Exception as e:
+        print(f"Error loading Firebase credentials from file: {e}")
+else:
+    print("Warning: No Firebase credentials provided. Set FIREBASE_CREDENTIALS_PATH")

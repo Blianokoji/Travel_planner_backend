@@ -7,3 +7,11 @@ services:
     branch: master
     repo: https://github.com/Blianokoji/Travel_planner_backend
     autoDeploy: true
+    healthCheckPath: /health
+    envVars:
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: "*"
+      - key: DEBUG
+        value: "false"
