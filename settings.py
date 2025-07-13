@@ -3,10 +3,7 @@ import json
 from typing import List
 from pathlib import Path
 from pydantic_settings import BaseSettings
-from dotenv import load_dotenv
 
-# Load .env file
-load_dotenv()
 
 class Settings(BaseSettings):
     FIREBASE_CREDENTIALS_PATH: str
@@ -14,16 +11,16 @@ class Settings(BaseSettings):
     debug: bool = False
 
     # JWT settings
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY")
+    jwt_secret_key: str
     jwt_algorithm: str = "HS256"
     jwt_expire_minutes: int = 60 * 24
 
     # API Keys
-    gemini_api_key: str = os.getenv("GEMINI_API_KEY", "")
-    google_maps_api_key: str = os.getenv("GOOGLE_MAPS_API_KEY", "")
+    gemini_api_key: str = ""
+    google_maps_api_key: str = ""
 
     # CORS settings
-    allowed_origins: List[str] = os.getenv("ALLOWED_ORIGINS")
+    allowed_origins: List[str] = []
 
     # Server settings
     host: str = "0.0.0.0"
@@ -34,8 +31,8 @@ class Settings(BaseSettings):
     log_file: str = "/tmp/fastapi_app.log"
 
     class Config:
-        env_file = ".env"
         case_sensitive = False
+
 
 # Instantiate settings
 settings = Settings()
