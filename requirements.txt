@@ -1,7 +1,7 @@
 # FastAPI and web framework dependencies
 fastapi==0.104.1
 uvicorn[standard]==0.24.0
-pydantic==1.10.14
+pydantic==2.5.0
 pydantic-settings
 pydantic[email]
 
