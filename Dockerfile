@@ -1,20 +1,20 @@
 # Use official Python image
 FROM python:3.11-slim
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE 1
-ENV PYTHONUNBUFFERED 1
+# # Set environment variables
+# ENV PYTHONDONTWRITEBYTECODE 1
+# ENV PYTHONUNBUFFERED 1
 
-# Install system dependencies (for Rust & maturin builds)
-RUN apt-get update && apt-get install -y \
-    gcc \
-    libffi-dev \
-    curl \
-    build-essential \
-    pkg-config
+# # Install system dependencies (for Rust & maturin builds)
+# RUN apt-get update && apt-get install -y \
+#     gcc \
+#     libffi-dev \
+#     curl \
+#     build-essential \
+#     pkg-config
 
-# Install Rust (for pydantic-core etc.)
-RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
-ENV PATH="/root/.cargo/bin:${PATH}"
+# # Install Rust (for pydantic-core etc.)
+# RUN curl https://sh.rustup.rs -sSf | sh -s -- -y
+# ENV PATH="/root/.cargo/bin:${PATH}"
 
 # Set work directory
 WORKDIR /app
