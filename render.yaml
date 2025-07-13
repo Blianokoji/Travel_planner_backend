@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: travel-planner-api
+    env: docker
+    plan: free
+    dockerfilePath: Dockerfile
+    autoDeploy: true
+    envVars:
+      - key: ENV
+        value: production
