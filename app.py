@@ -1,16 +1,14 @@
-from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 import logging
 import os
-from datetime import datetime, timedelta
-from jose import JWTError, jwt
+from datetime import datetime
 from dotenv import load_dotenv
 from src.dependencies.auth import get_current_user, TokenData
-from src.routes.Auth import auth_router
 from src.services.planner import TravelPlanner
+from src.routes.Auth import auth_router
 from settings import settings
 
 load_dotenv()
@@ -23,13 +21,11 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.allowed_origins,
+    allow_origins=["http://localhost:5173"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
-
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="auth/token")
 
 planner = TravelPlanner(
     gemini_api_key=settings.gemini_api_key,
@@ -55,45 +51,25 @@ class TravelPlanRequest(BaseModel):
     budget: str
     preferences: Optional[str] = ""
 
-from pydantic import BaseModel
-from typing import Union
-
-class TravelPlanResponse(BaseModel):
-    plan: Union[str, dict]  # Or better: define the full plan schema
-
-
-class TokenData(BaseModel):
-    username: Optional[str] = None
-
-def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=settings.jwt_expire_minutes))
-    to_encode.update({"exp": expire})
-    return jwt.encode(to_encode, settings.jwt_secret_key, algorithm=settings.jwt_algorithm)
-
-def verify_token(token: str, credentials_exception):
-    try:
-        payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
-        username: str = payload.get("sub")
-        if not username:
-            raise credentials_exception
-        return TokenData(username=username)
-    except JWTError:
-        raise credentials_exception
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    return verify_token(token, credentials_exception)
-
 app.include_router(auth_router, prefix="/auth", tags=["authentication"])
 
 @app.get("/", tags=["root"])
 async def read_root():
     return {"message": "Travel Planner API is running"}
+
+class Activity(BaseModel):
+    time: str
+    description: str
+
+class Day(BaseModel):
+    date: str
+    activities: List[Activity]
+
+class TravelPlanResponse(BaseModel):
+    title: str
+    budget: float
+    days: List[Day]
+    notes: List[str]
 
 @app.post("/generate_plan", response_model=TravelPlanResponse, tags=["travel"])
 async def generate_plan(request: TravelPlanRequest, current_user: TokenData = Depends(get_current_user)):
@@ -106,12 +82,12 @@ async def generate_plan(request: TravelPlanRequest, current_user: TokenData = De
             budget=request.budget,
             preferences=request.preferences
         )
-        if not plan:
-            raise HTTPException(status_code=500, detail="Failed to generate plan")
-        return TravelPlanResponse(plan=plan)
+        logging.debug(f"Generated plan: {plan}")
+        return plan
     except Exception as e:
         logging.error(f"Plan generation error: {e}")
         raise HTTPException(status_code=500, detail="Internal error")
+
 
 @app.get("/health", tags=["health"])
 async def health_check():

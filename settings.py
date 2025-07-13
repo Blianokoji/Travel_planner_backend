@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     google_maps_api_key: str = os.getenv("GOOGLE_MAPS_API_KEY", "")
 
     # CORS settings
-    allowed_origins: List[str] = ["*"]
+    allowed_origins: List[str] = os.getenv("ALLOWED_ORIGINS")
 
     # Server settings
     host: str = "0.0.0.0"
