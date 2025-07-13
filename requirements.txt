@@ -10,7 +10,7 @@ fastapi-cors==0.0.6
 
 # JWT and authentication
 python-jose[cryptography]==3.3.0
-passlib[bcrypt]==1.7.4
+passlib[bcrypt]
 python-multipart==0.0.6
 
 # Database
