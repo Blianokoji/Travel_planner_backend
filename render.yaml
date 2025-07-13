@@ -1,17 +1,20 @@
 services:
   - type: web
     name: travel-planner-backend
-    env: docker
-    plan: free
-    region: oregon
-    branch: master
-    repo: https://github.com/Blianokoji/Travel_planner_backend
-    autoDeploy: true
-    healthCheckPath: /health
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn app:app --host=0.0.0.0 --port=8000"
     envVars:
+      - key: FIREBASE_CREDENTIALS_PATH
+        value: /etc/secrets/firebase_cred.json
       - key: JWT_SECRET_KEY
-        generateValue: true
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false
       - key: ALLOWED_ORIGINS
-        value: "*"
-      - key: DEBUG
-        value: "false"
+        sync: false
+    secretFiles:
+      - name: firebase_cred.json
+        mountPath: /etc/secrets/firebase_cred.json
