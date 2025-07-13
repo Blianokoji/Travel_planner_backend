@@ -1,10 +1,9 @@
 services:
   - type: web
-    name: travel-planner-api
+    name: travel-planner-backend
     env: docker
     plan: free
-    dockerfilePath: Dockerfile
+    region: oregon
+    branch: master
+    repo: https://github.com/Blianokoji/Travel_planner_backend
     autoDeploy: true
-    envVars:
-      - key: ENV
-        value: production
