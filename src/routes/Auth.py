@@ -66,7 +66,7 @@ async def register(user: UserCreate, response: Response):
             raise HTTPException(status_code=503, detail="Database not available")
             
         if await get_user(user.username):
-            raise HTTPException(400, "Username already exists")
+            return RegisterResponse(message="Username is taken")
 
         email_check = firebase_db.collection("users").where("email", "==", user.email).stream()
         for _ in email_check:
