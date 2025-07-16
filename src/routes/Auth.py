@@ -32,9 +32,6 @@ class Token(BaseModel):
 
 class RegisterResponse(BaseModel):
     message: str
-    user: UserResponse
-    token: Token
-
 # Helpers 
 def verify_password(plain, hashed):
     return pwd_context.verify(plain, hashed)
@@ -73,7 +70,7 @@ async def register(user: UserCreate, response: Response):
 
         email_check = firebase_db.collection("users").where("email", "==", user.email).stream()
         for _ in email_check:
-            raise HTTPException(400, "Email already registered")
+            return RegisterResponse(message="User Already Exists")
 
         hashed_password = get_password_hash(user.password)
         data = {
@@ -85,22 +82,8 @@ async def register(user: UserCreate, response: Response):
         logging.debug(f"Registering user: {data}")
         firebase_db.collection("users").add(data)
         
-        # Generate token and set cookie
-        access_token = create_access_token({"sub": user.username})
-        response.set_cookie(
-            key="access_token",
-            value=access_token,
-            httponly=True,
-            secure=True,
-            samesite="Lax",
-            max_age=60 * settings.jwt_expire_minutes,
-            path="/"
-        )
-        
         return RegisterResponse(
-            message="Registration successful",
-            user=UserResponse(**{k: data[k] for k in ("username", "email", "created_at")}),
-            token=Token(access_token=access_token, token_type="bearer")
+            message="Registration successful"
         )
     except Exception as e:
         logging.error(f"Error in register endpoint: {str(e)}")
@@ -124,7 +107,7 @@ async def login(user_data: UserLogin, response: Response):
         path="/"
     )
     
-    return {"access_token": access_token, "token_type": "bearer"}
+    return Token(access_token=access_token,token_type="bearer")
 
 @auth_router.get("/me", response_model=UserResponse)
 async def get_me(current_user: TokenData = Depends(get_current_user)):
