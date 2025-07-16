@@ -16,10 +16,13 @@ async def get_current_user(request: Request):
     )
     token = request.cookies.get("access_token")
     if not token:
+        print(token)
         raise credentials_exception
     try:
+        print(payload)
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         username: str = payload.get("sub")
+        print(username)
         if not username:
             raise credentials_exception
         return TokenData(username=username)
