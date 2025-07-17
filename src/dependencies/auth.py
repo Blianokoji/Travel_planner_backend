@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from settings import settings
 
 class TokenData(BaseModel):
-    username: Optional[str] = None
+    username: str 
 
 async def get_current_user(request: Request):
     credentials_exception = HTTPException(
@@ -19,7 +19,6 @@ async def get_current_user(request: Request):
         print(token)
         raise credentials_exception
     try:
-        print(payload)
         payload = jwt.decode(token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm])
         username: str = payload.get("sub")
         print(username)
