@@ -72,7 +72,7 @@ class TravelPlanResponse(BaseModel):
     notes: List[str]
 
 @app.post("/generate_plan", response_model=TravelPlanResponse, tags=["travel"])
-async def generate_plan(request: TravelPlanRequest, current_user: TokenData = Depends(get_current_user)):
+async def generate_plan(request: TravelPlanRequest):
     try:
         logging.debug(f"Received plan request: {request.dict()}")
         plan = planner.generate_travel_plan(
